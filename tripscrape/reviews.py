@@ -66,7 +66,7 @@ def wait_for_review_elements(xpath):
     True
     """
     for i in xpath:
-        WebDriverWait(driver, 3)\
+        WebDriverWait(driver, 10)\
             .until(EC.presence_of_element_located((By.XPATH, i)))
 
     return True
@@ -112,16 +112,24 @@ def get_numer_of_reviews(s):
     Parameters
     ----------
     s : int
-        max number of seconds to wait for the button to be clickable
+        max number of seconds to wait for the element is available
 
     Returns
     -------
     int
         number of reviews of a given attraction
     """
-    n = WebDriverWait(driver, s).until(EC.presence_of_element_located((By.XPATH, './/span[@class="_1yuvE2vR"]'))).text
-    m = int(n.replace(",", ""))
-    return m
+    #n = WebDriverWait(driver, s).until(EC.presence_of_element_located((By.XPATH, './/span[@class="_1yuvE2vR"]'))).text
+    #m = int(n.replace(",", ""))
+    number_of_reviews = list()
+    WebDriverWait(driver, s).until(EC.presence_of_element_located((By.XPATH, './/ul[@class="_2lcHrbTn"]')))
+    li = driver.find_elements_by_xpath('.//li[@class="ui_radio _3gEj_Jb5"]')
+    for lan in li[1:]:
+        v = lan.find_element_by_xpath('.//label[@class="bUKZfPPw"]').text
+        match = re.match(r"(.*)\((\d*,*\d*)\)", v)
+        number_of_reviews.append({match.group(1): int(match.group(2).replace(",",""))})
+
+    return number_of_reviews
 
 
 def get_review_contents(attraction):
@@ -168,17 +176,19 @@ def get_review_contents(attraction):
             review = {}
             wait_for_review_elements(['.//div[@class="glasR4aX"]', 
                                     ".//span[contains(@class, 'ui_bubble_rating bubble_')]",
-                                    './/span[@class="_34Xs-BQm"]',
+                                    './/div[@class="_2fxQ4TOx"]',
                                     './/div[@class="cPQsENeY"]',
-                                    './/a[@class="_3x5_awTA ui_social_avatar inline"]',
-                                    './/span[@class="default _3J15flPT small"]',
-                                    './/span[@class="_1fk70GUn"]'
                                     ])
-            #review['title'] = wait_for_review_element('.//div[@class="glasR4aX"]').text
             review['title'] = r.find_element_by_xpath('.//div[@class="glasR4aX"]').text
             review['rating'] = int(r.find_element_by_xpath(".//span[contains(@class, 'ui_bubble_rating bubble_')]").get_attribute("class").split("_")[3][0])
-            full_date = r.find_element_by_xpath('.//span[@class="_34Xs-BQm"]').text
-            review['date'] = get_substring(full_date, "Date of experience: ")
+            try:
+                full_date = r.find_element_by_xpath('.//div[@class="_2fxQ4TOx"]').text
+                date = re.match(r".*wrote a review (.*)", full_date).group(1)
+                review['date'] = date
+            except:
+                logger.warning("No date found at attraction {}, page {}, review {}".format(attractions[attraction]["name"], i+1, r_i+1))
+
+            
             review['full'] = r.find_element_by_xpath('.//div[@class="cPQsENeY"]').text
             try:
                 profile_link = r.find_element_by_xpath('.//a[@class="_3x5_awTA ui_social_avatar inline"]').get_attribute("href")
@@ -192,10 +202,18 @@ def get_review_contents(attraction):
                 logger.info("No user location at attraction {}, page {}, review {}".format(attractions[attraction]["name"], i+1, r_i+1))
             
             try:
-                review['user_contributions'] = int(r.find_element_by_xpath('.//span[@class="_1fk70GUn"]').text.replace(",",""))
+                review['user_contributions'] = int(r.find_elements_by_xpath('.//span[@class="_1fk70GUn"]')[0].text.replace(",",""))
+            except:
+                logger.info("No user contributions at attraction {}, page {}, review {}".format(attractions[attraction]["name"], i+1, r_i+1))
+            try:
+                review['user_helpful_votes'] = int(r.find_elements_by_xpath('.//span[@class="_1fk70GUn"]')[1].text.replace(",",""))
             except:
                 logger.info("No user contributions at attraction {}, page {}, review {}".format(attractions[attraction]["name"], i+1, r_i+1))
 
+            try:
+                review['review_id'] = r.find_element_by_xpath('.//div[@class="oETBfkHU"]').get_attribute("data-reviewid")
+            except:
+                logger.info("No review ID at attraction {}, page {}, review {}".format(attractions[attraction]["name"], i+1, r_i+1))
             
             reviews.append(review)
 
@@ -212,11 +230,21 @@ def get_review_contents(attraction):
         
 
 
-def do_scrape():
+def do_scrape(iterable):
+    """
+    Scrapes reviews from a specified number of list items, and dumps each attraction's reviews in a separate JSON file.
+
+    Parameters
+    ----------
+    iterable : list
+            a list of indexes corresponding to attractions in the attractions list.
+    
+    """
     # 1st level (attractions)
-    for i, idx in enumerate([900]):
+    for i, idx in enumerate(iterable):
         if not isfile("reviews/reviews_{}_{}.json".format(args.pid,idx)):
             logger.info("Scraping attraction: " + attractions[idx]["name"])
+            print("Scraping attraction: " + attractions[idx]["name"] + ": {} of {}.".format(i+1, len(iterable)))
             url = "{}{}{}".format(BASEURL, attractions[idx]["url"], LANGUAGE)
             driver.get(url)
             if i == 0:
@@ -226,14 +254,13 @@ def do_scrape():
                 attractions[idx]["coordinates"] = get_latlon(5) 
             except:
                 logger.warning("Could not fetch coordinates at attraction {}".format(attractions[idx]))
-            
             try:
                 attractions[idx]["num_reviews"] = get_numer_of_reviews(5)
             except Exception as e:
-                attractions[idx]["num_reviews"] = 0
+                attractions[idx]["num_reviews"] = [{"English" : 0}]
                 logger.warning("No reviews at attraction {}. {}".format(attractions[idx]["name"], str(e)))
 
-            if attractions[idx]["num_reviews"] != 0:
+            if not any(lan == {"English" : 0} for lan in attractions[idx]["num_reviews"]):
                 reviews = get_review_contents(idx)
                 attractions[idx]["reviews"] = reviews
             with open("reviews/reviews_{}_{}.json".format(args.pid,idx), "w") as f:
@@ -246,7 +273,7 @@ def do_scrape():
 
 def main():
     logger.info("Start scraping reviews...")
-    do_scrape()
+    do_scrape(range(100,300))
     driver.close()
     logger.info("Scrape done, stopping...")
 
