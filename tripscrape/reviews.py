@@ -244,7 +244,7 @@ def do_scrape(iterable):
     """
     # 1st level (attractions)
     for i, idx in enumerate(iterable):
-        if not isfile("reviews/reviews_{}_{}.json".format(args.pid,idx)):
+        if not isfile("../reviews/reviews_{}_{}.json".format(args.pid,idx)):
             logger.info("Scraping attraction: " + attractions[idx]["name"])
             print("Scraping attraction: " + attractions[idx]["name"] + ": {} of {}.".format(i+1, len(iterable)))
             url = "{}{}{}".format(BASEURL, attractions[idx]["url"], LANGUAGE)
@@ -265,7 +265,7 @@ def do_scrape(iterable):
             if not any(lan == {"English" : 0} for lan in attractions[idx]["num_reviews"]):
                 reviews = get_review_contents(idx)
                 attractions[idx]["reviews"] = reviews
-            with open("reviews/reviews_{}_{}.json".format(args.pid,idx), "w") as f:
+            with open("../reviews/reviews_{}_{}.json".format(args.pid,idx), "w") as f:
                 json.dump(attractions[idx], f)
         else:
             logger.warning("reviews/reviews_{}_{}.json already exists!".format(args.pid,idx))
