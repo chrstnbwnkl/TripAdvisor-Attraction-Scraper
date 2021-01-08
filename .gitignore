@@ -17,3 +17,7 @@ __pycache__/
 
 reviews/
 *.json
+
+# jupyter nb
+.ipynb_checkpoints
+.ipynb

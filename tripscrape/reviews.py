@@ -14,19 +14,21 @@ import selenium
 
 parser = argparse.ArgumentParser(description='Scrape Tripadvisor reviews from a list of attractions provided by the attractions scraper. Retrieves full review, rating, user ID, date, as well as lat/lon of the attraction.')
 parser.add_argument('--pid', type=int, help='a TripAdvisor place ID', default=186338)
+parser.add_argument('--start', type=int, help='start scraping at index')
+parser.add_argument('--end', type=int, help='end scraping at index')
 args = parser.parse_args()
 
 logging.basicConfig(filename='reviews.log', level=logging.INFO, filemode="w", format='%(asctime)s:%(message)s')
 logger = logging.getLogger(__name__)
 
 
-with open("url_list_{}.json".format(args.pid), "r") as f:
+with open("../url_list_{}.json".format(args.pid), "r") as f:
     attractions = json.loads(f.read())
 
 BASEURL = "https://www.tripadvisor.com"
 LANGUAGE = "?filterLang=EN"
 
-driver = webdriver.Chrome("./tripscrape/chromedriver")
+driver = webdriver.Chrome("../tripscrape/chromedriver")
 
 def get_substring(string, substring, mode="after"):
     """
@@ -273,7 +275,7 @@ def do_scrape(iterable):
 
 def main():
     logger.info("Start scraping reviews...")
-    do_scrape(range(100,300))
+    do_scrape(range(args.start,args.end))
     driver.close()
     logger.info("Scrape done, stopping...")
 
