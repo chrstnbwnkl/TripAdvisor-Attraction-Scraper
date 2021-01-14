@@ -1,0 +1,23 @@
+.vscode/*
+*.code-workspace
+
+# Local History for Visual Studio Code
+.history/
+
+# Selenium webdriver for Chrome
+chromedriver
+
+.DS_Store
+
+*.log
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+reviews/
+*.json
+
+# jupyter nb
+.ipynb_checkpoints
+*.ipynb
