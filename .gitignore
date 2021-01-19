@@ -21,3 +21,5 @@ reviews/
 # jupyter nb
 .ipynb_checkpoints
 *.ipynb
+
+.env
