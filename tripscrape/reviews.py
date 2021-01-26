@@ -12,7 +12,7 @@ from tripscrape import Scraper, Attraction, Review, User
 
 class ReviewScraper(Scraper):
     """
-    A scraper of reviews (extension of the Scraper base class)
+    A scraper of reviews (extends the Scraper base class)
 
     Parameters
     ----------
@@ -60,11 +60,6 @@ class ReviewScraper(Scraper):
     def read_attractions(self):
         """
         Read attractions from the attractions table in the database.
-
-        Returns
-        -------
-        list
-            a list of dictionaries
         """
         query_template = 'SELECT id, url FROM attractions'
 
@@ -75,6 +70,7 @@ class ReviewScraper(Scraper):
             return self.db_iter_cur.execute(query_template, (self.attr_types,))
         elif len(self.attr_types) > 1:
             query_template += ' WHERE attr_type IN %s AND scraped = False ORDER BY "id" DESC'
+            #query_template += ' WHERE id = 553603'
             return self.db_iter_cur.execute(query_template, (self.attr_types,))
     
     def update_attraction(self, attr):
@@ -169,6 +165,26 @@ class ReviewScraper(Scraper):
         querystring = self.db_cur.mogrify(query_template, (boolean, attr.ID))
         print(f"{attr.ID} scraped set to {boolean}")
         return super().update_record(querystring)
+    
+    def traverse(self, val):
+        """
+        Traverses a nested dictionary and finds any review dictionaries
+
+        Parameters
+        ----------
+        val : dict
+            a dictionary from a TA static site
+
+        """
+        if isinstance(val, dict):
+            for k, v in val.items():
+                if k == 'reviews':
+                    yield v
+                else:
+                    yield from self.traverse(v)
+        elif isinstance(val, list):
+            for v in val:
+                yield from self.traverse(v)
 
     def scrape_page(self, url, attr_ID, index):
         """
@@ -182,53 +198,55 @@ class ReviewScraper(Scraper):
             the current page of the attraction's reviews
         """
         print("Scraping page {}".format(url))
-        soup = bs(get(url).content, "html.parser")
-        
-        review_divs = soup.find_all("div", {"class" : "Dq9MAugU T870kzTX LnVzGwUB"})
+        text = get(url).text
+        try:
+            data = re.search(r'window\.__WEB_CONTEXT__=(.*?});', text).group(1)
+        except AttributeError:
+            data = re.search(r'window\.__WEB_CONTEXT__=(.*?});', text).group(1)
+        data = data.replace('pageManifest', '"pageManifest"')
+        data = json.loads(data)
 
-        if len(review_divs) == 0:
-            self.print_missing_info("reviews", attr_ID, index, -2, url)
+        for reviews in self.traverse(data):
+            if reviews:
+                for ridx, r in enumerate(reviews):
+                    review = Review()
+                    user = User()
 
-        for ridx, div in enumerate(review_divs):
-            review = Review()
-            user = User()
+                    review.ID = r["id"]
+                    review.title = r["title"]
+                    review.rating = r["rating"]
+                    review.full = r["text"]
+                    review.attr_ID = attr_ID
+                    
+                    review.date = r["publishedDate"]
+                    try:
+                        review.user_profile = r["userProfile"]["route"]["url"]
+                        user.profile = review.user_profile
+                    except:
+                        self.print_missing_info("user profile", attr_ID, index, ridx, url)
+                    
+                    try:
+                        user.location = json.dumps(r["userProfile"]["hometown"])
+                    except:
+                        self.print_missing_info("user location", attr_ID, index, ridx, url)
+                    
+                    try:
+                        user.contributions = r["userProfile"]["contributionCounts"]["sumAllUgc"]
+                    except:
+                        self.print_missing_info("user contributions", attr_ID, index, ridx, url)
 
-            review.ID = div.find("div", {"class" : "oETBfkHU"}).get("data-reviewid")
-            review.title = div.find("div", {"class" : "glasR4aX"}).get_text()
-            review.rating = int(div.find('span', {"class" : "ui_bubble_rating"}).get("class")[1].split("_")[1][0])
-            review.full = div.find("div", {"class" : "cPQsENeY"}).get_text().replace("…", "")
-            review.attr_ID = attr_ID
-            try:
-                raw_date = div.find("div", {"class" : "_2fxQ4TOx"}).get_text()
-                review.date = re.match(r".*wrote a review (.*)", raw_date).group(1)
-            except AttributeError:
-                self.print_missing_info("date", attr_ID, index + 1, ridx + 1, url)
+                    try:    
+                        user.helpful_votes = r["userProfile"]["contributionCounts"]["helpfulVote"]
+                    except:
+                        self.print_missing_info("helpful", attr_ID, index, ridx, url)
+                    
+                    self.update_user(user)
+                    self.update_review(review)
 
-            try:
-                review.user_profile = div.find("a", {"class" : "_3x5_awTA ui_social_avatar inline"}).get("href")
-                user.profile = review.user_profile
-            except AttributeError:
-                self.print_missing_info("user profile", attr_ID, index + 1, ridx + 1, url)
-            
-            try:
-                user.location = div.find("span", {"class" : "default _3J15flPT small"}).get_text()
-            except AttributeError:
-                self.print_missing_info("user location", attr_ID, index + 1, ridx + 1, url)
-            
-            try:
-                user.contributions = int(div.find_all("span", {"class" : "_1fk70GUn"})[0].get_text().replace(",", ""))
-            except:
-                self.print_missing_info("user contributions", attr_ID, index + 1, ridx + 1, url)
-            
-            try:
-                user.helpful_votes = int(div.find_all("span", {"class" : "_1fk70GUn"})[1].get_text().replace(",", ""))
-            except:
-                self.print_missing_info("helpful votes", attr_ID, index + 1, ridx + 1, url)
-            
-            self.update_user(user)
-            self.update_review(review)
+            else:
+                self.print_missing_info("reviews", attr_ID, index, -2, url)
 
-        return
+
 
     def do_scrape(self):
         """
@@ -246,9 +264,7 @@ class ReviewScraper(Scraper):
             a.location, a.num_reviews, number_of_pages = self.get_attr_details(current_url)
             print(a.location, a.num_reviews, number_of_pages)
             self.update_attraction(a)
-            
-            #entry_soup = bs(get(current_url).content, "html.parser")
-            #number_of_pages = self.get_num_pages(entry_soup)
+
             links = self.generate_page_links(current_url, number_of_pages)
 
             for index, link in enumerate(links):
@@ -261,7 +277,7 @@ class ReviewScraper(Scraper):
 def main():
     conn = db.connect(**dotenv_values())
     conn_iter = db.connect(**dotenv_values())
-    r = ReviewScraper(db_conn=conn, db_iter_conn=conn_iter, attr_types=('Other',))
+    r = ReviewScraper(db_conn=conn, db_iter_conn=conn_iter, attr_types=('Other', 'Sights & Landmarks'))
     r.do_scrape()
     r.db_conn.close()
 
