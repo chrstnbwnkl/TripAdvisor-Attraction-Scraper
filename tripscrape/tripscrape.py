@@ -81,7 +81,7 @@ class Scraper:
 
         elif search_type == "reviews":
             url = url.replace("-Reviews", "-Reviews-{}")
-            pages =  [""] + ["-or{}-".format(i*5) for i in range(amount)][1:]
+            pages =  [""] + ["-or{}-".format(i*5) for i in range(amount)][2133:]
             return [url.format(i) for i in pages]
     
     def update_record(self, querystring):

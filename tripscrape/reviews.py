@@ -69,8 +69,8 @@ class ReviewScraper(Scraper):
             query_template += ' WHERE attr_type IN (%s) AND scraped = False ORDER BY "id" DESC'
             return self.db_iter_cur.execute(query_template, (self.attr_types,))
         elif len(self.attr_types) > 1:
-            query_template += ' WHERE attr_type IN %s AND scraped = False ORDER BY "id" DESC'
-            #query_template += ' WHERE id = 553603'
+            #query_template += ' WHERE attr_type IN %s AND scraped = False ORDER BY "id" DESC'
+            query_template += ' WHERE id = 553603'
             return self.db_iter_cur.execute(query_template, (self.attr_types,))
     
     def update_attraction(self, attr):
@@ -198,14 +198,30 @@ class ReviewScraper(Scraper):
             the current page of the attraction's reviews
         """
         print("Scraping page {}".format(url))
-        text = get(url).text
-        try:
-            data = re.search(r'window\.__WEB_CONTEXT__=(.*?});', text).group(1)
-        except AttributeError:
-            data = re.search(r'window\.__WEB_CONTEXT__=(.*?});', text).group(1)
+
+        while True:
+            try:
+                text = get(url).text
+                data = re.search(r'window\.__WEB_CONTEXT__=(.*?});', text).group(1)
+            except AttributeError:
+                sleep(1)
+                continue
+            break
+
         data = data.replace('pageManifest', '"pageManifest"')
         data = json.loads(data)
 
+        traverser = self.traverse(data)
+
+        _exhausted = object()
+        while next(traverser, _exhausted) == _exhausted:
+            print(f'Weird stuff happening at {index}; retrying...')
+            text = get(url).text
+            data = re.search(r'window\.__WEB_CONTEXT__=(.*?});', text).group(1)
+            data = data.replace('pageManifest', '"pageManifest"')
+            data = json.loads(data)
+            traverser = self.traverse(data)
+        
         for reviews in self.traverse(data):
             if reviews:
                 for ridx, r in enumerate(reviews):
