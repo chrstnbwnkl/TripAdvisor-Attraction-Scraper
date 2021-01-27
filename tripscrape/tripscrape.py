@@ -9,7 +9,7 @@ class Scraper:
     """
     Base class for Tripadvisor scraper
 
-    Parameters
+    Attributes
     ----------
     db_conn : psycopg2.connection()
         a psycopg2 connection to PostgreSQL
@@ -19,14 +19,13 @@ class Scraper:
         The base url to be formatted
     """
 
-    def __init__(self, db_conn = None, place_id = 186338, base_url="https://www.tripadvisor.com"):
+    def __init__(
+        self, db_conn=None, place_id=186338, base_url="https://www.tripadvisor.com"
+    ):
         self.db_conn = db_conn
         self.db_cur = db_conn.cursor()
         self.base_url = base_url
         self.place_id = place_id
-    
-
-
 
     def get_num_pages(self, soup, search_type):
         """
@@ -45,18 +44,20 @@ class Scraper:
             number of pages found
         """
         if search_type == "reviews":
-            num_string = soup.find("span", {"class" : "mxlinKbW"}).get_text()
+            num_string = soup.find("span", {"class": "mxlinKbW"}).get_text()
             num_pages = int(num_string.replace(",", ""))
             return num_pages
 
         elif search_type == "attractions":
-            num_string = soup.find('div', {'class': 'pageNumbers'}).findChildren(recursive=True)[-1].get_text()
+            num_string = (
+                soup.find("div", {"class": "pageNumbers"})
+                .findChildren(recursive=True)[-1]
+                .get_text()
+            )
             num_pages = int(num_string)
             return num_pages
 
-        
-
-    def generate_page_links(self, amount, search_type, url= None):
+    def generate_page_links(self, amount, search_type, url=None):
         """
         Generates links for every page of the search results or reviews.
 
@@ -76,14 +77,14 @@ class Scraper:
         """
 
         if search_type == "attractions":
-            pages =  [""] + ["oa{}".format(i*30) for i in range(amount)][1:]
+            pages = [""] + ["oa{}".format(i * 30) for i in range(amount)][1:]
             return [self.base_url.format(self.place_id, i) for i in pages]
 
         elif search_type == "reviews":
             url = url.replace("-Reviews", "-Reviews-{}")
-            pages =  [""] + ["-or{}-".format(i*5) for i in range(amount)][2133:]
+            pages = [""] + ["-or{}-".format(i * 5) for i in range(amount)][1:]
             return [url.format(i) for i in pages]
-    
+
     def update_record(self, querystring):
         """
         Executes the passed querystring
@@ -98,11 +99,12 @@ class Scraper:
         self.db_conn.commit()
         return
 
+
 class Attraction:
     """
     TripAdvisor attraction class.
 
-    Parameters
+    Attributes
     ----------
     ID : int
         TripAdvisor attraction id
@@ -118,7 +120,9 @@ class Attraction:
         the number of reviews in the three most frequent review languages
     """
 
-    def __init__(self, ID = None, name = None, url = None, attr_type = None, location = None, num_reviews = 0):
+    def __init__(
+        self, ID=None, name=None, url=None, attr_type=None, location=None, num_reviews=0
+    ):
         self._ID = ID
         self._name = name
         self._url = url
@@ -149,8 +153,10 @@ class Attraction:
     @url.setter
     def url(self, value):
         self._url = value
-        self._ID = int(re.match(r"/Attraction_Review-g\d*-d(\d*)-", value).group(1)) # also sets value for ID using regex
-    
+        self._ID = int(
+            re.match(r"/Attraction_Review-g\d*-d(\d*)-", value).group(1)
+        )  # also sets value for ID using regex
+
     @property
     def attr_type(self):
         return self._attr_type
@@ -166,7 +172,7 @@ class Attraction:
     @location.setter
     def location(self, value):
         self._location = value
-    
+
     @property
     def num_reviews(self):
         return self._num_reviews
@@ -180,7 +186,7 @@ class Review:
     """
     Tripadvisor review class.
 
-    Parameters
+    Attributes
     ----------
     ID : int
         the TripAdvisor review id
@@ -197,7 +203,17 @@ class Review:
     user_profile : str
         the relative URL to the user profile
     """
-    def __init__(self, ID = None, title = None, rating = None, date = None, full = None, attr_ID = None, user_profile = None):
+
+    def __init__(
+        self,
+        ID=None,
+        title=None,
+        rating=None,
+        date=None,
+        full=None,
+        attr_ID=None,
+        user_profile=None,
+    ):
         self._ID = ID
         self._title = title
         self._rating = rating
@@ -205,7 +221,7 @@ class Review:
         self._full = full
         self._attr_ID = attr_ID
         self._user_profile = user_profile
-    
+
     @property
     def ID(self):
         return self._ID
@@ -213,7 +229,7 @@ class Review:
     @ID.setter
     def ID(self, value):
         self._ID = value
-    
+
     @property
     def title(self):
         return self._title
@@ -221,7 +237,7 @@ class Review:
     @title.setter
     def title(self, value):
         self._title = value
-    
+
     @property
     def rating(self):
         return self._rating
@@ -229,7 +245,7 @@ class Review:
     @rating.setter
     def rating(self, value):
         self._rating = value
-    
+
     @property
     def date(self):
         return self._date
@@ -237,7 +253,7 @@ class Review:
     @date.setter
     def date(self, value):
         self._date = value
-    
+
     @property
     def full(self):
         return self._full
@@ -253,7 +269,7 @@ class Review:
     @attr_ID.setter
     def attr_ID(self, value):
         self._attr_ID = value
-    
+
     @property
     def user_profile(self):
         return self._user_profile
@@ -262,11 +278,12 @@ class Review:
     def user_profile(self, value):
         self._user_profile = value
 
+
 class User:
     """
     TripAdvisor user class.
 
-    Parameters
+    Attributes
     ----------
     profile : str
         the relative URL to the user profile
@@ -277,7 +294,10 @@ class User:
     helpful_votes : int
         the number of helpful votes a user has received on TripAdvisor
     """
-    def __init__(self, profile = None, location = None, contributions = None, helpful_votes = None):
+
+    def __init__(
+        self, profile=None, location=None, contributions=None, helpful_votes=None
+    ):
         self._profile = profile
         self._location = location
         self._contributions = contributions
@@ -298,7 +318,7 @@ class User:
     @location.setter
     def location(self, value):
         self._location = value
-    
+
     @property
     def contributions(self):
         return self._contributions
