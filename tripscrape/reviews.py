@@ -1,13 +1,15 @@
-from time import sleep
 import json
 import re
-from dotenv import dotenv_values
 from random import random
-from requests import get
+from time import sleep
+
 import psycopg2 as db
-import selenium_utils
 from bs4 import BeautifulSoup as bs
-from tripscrape import Scraper, Attraction, Review, User
+from dotenv import dotenv_values
+from requests import get
+
+import selenium_utils
+from tripscrape import Attraction, Review, Scraper, User
 
 
 class ReviewScraper(Scraper):
@@ -64,7 +66,7 @@ class ReviewScraper(Scraper):
         """
         Read attractions from the attractions table in the database.
         """
-        query_template = "SELECT id, url FROM attractions"
+        query_template = "SELECT id, url FROM attractions WHERE scraped = False"
 
         if self.attr_types == "all":
             return self.db_iter_cur.execute(query_template)
@@ -77,7 +79,7 @@ class ReviewScraper(Scraper):
             query_template += (
                 ' WHERE attr_type IN %s AND scraped = False ORDER BY "id" DESC'
             )
-            # query_template += ' WHERE id = 553603'
+            # query_template += " WHERE id = 187676"
             return self.db_iter_cur.execute(query_template, (self.attr_types,))
 
     def update_attraction(self, attr):
@@ -321,11 +323,10 @@ class ReviewScraper(Scraper):
 def main():
     conn = db.connect(**dotenv_values())
     conn_iter = db.connect(**dotenv_values())
-    r = ReviewScraper(
-        db_conn=conn, db_iter_conn=conn_iter, attr_types=("Other", "Sights & Landmarks")
-    )
+    r = ReviewScraper(db_conn=conn, db_iter_conn=conn_iter, attr_types="all")
     r.do_scrape()
     r.db_conn.close()
+    r.db_iter_conn.close()
 
 
 if __name__ == "__main__":

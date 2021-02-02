@@ -1,8 +1,9 @@
-from time import sleep
-from requests import get
 import re
-from bs4 import BeautifulSoup as bs
+from time import sleep
+
 import psycopg2 as db
+from bs4 import BeautifulSoup as bs
+from requests import get
 
 
 class Scraper:
